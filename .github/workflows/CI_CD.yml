@@ -1,0 +1,95 @@
+name: Flutter CI/CD
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+
+defaults:
+  run:
+    working-directory: pt3flutter
+
+jobs:
+  qa:
+    name: Job 1 - QA (Quality Assurance)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: 'stable'
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Run tests with coverage
+        run: flutter test --coverage
+
+      - name: Generate Coverage Summary
+        run: |
+          echo "## Coverage Summary" >> $GITHUB_STEP_SUMMARY
+          echo "| File | Coverage (%) |" >> $GITHUB_STEP_SUMMARY
+          echo "| :--- | :---: |" >> $GITHUB_STEP_SUMMARY
+          grep "SF:" coverage/lcov.info -A 2 | awk '/SF/ {f=$1} /LH/ {h=$1} /LF/ {l=$1; if(l>0) print "| " f " | " (h/l*100) "% |"}' | sed 's/SF:lib\///' | sed 's/LH://' | sed 's/LF://' >> $GITHUB_STEP_SUMMARY
+
+      - name: Upload coverage report
+        uses: actions/upload-artifact@v3
+        with:
+          name: coverage-report
+          path: pt3flutter/coverage/lcov.info
+
+  deploy_web:
+    name: Job 2 - Deploy Web (Firebase)
+    needs: qa
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: 'stable'
+      - run: flutter pub get
+      - run: flutter build web --release
+      - name: Deploy to Firebase Hosting
+        uses: FirebaseExtended/action-hosting-deploy@v0
+        with:
+          repoToken: '${{ secrets.GITHUB_TOKEN }}'
+          firebaseServiceAccount: '${{ secrets.FIREBASE_SERVICE_ACCOUNT_PROVA_2DF62 }}'
+          channelId: live
+          projectId: prova-2df62
+          entryPoint: pt3flutter
+
+  build_android:
+    name: Job 3 - Build Android (Release)
+    needs: qa
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - uses: actions/setup-java@v3
+        with:
+          distribution: 'zulu'
+          java-version: '17'
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: 'stable'
+
+      - name: Decode Keystore
+        run: echo "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" | base64 --decode > android/app/upload-keystore.jks
+
+      - name: Create key.properties
+        run: |
+          echo "storePassword=${{ secrets.ANDROID_KEYSTORE_PASSWORD }}" > android/key.properties
+          echo "keyPassword=${{ secrets.ANDROID_KEY_PASSWORD }}" >> android/key.properties
+          echo "keyAlias=${{ secrets.ANDROID_KEY_ALIAS }}" >> android/key.properties
+          echo "storeFile=upload-keystore.jks" >> android/key.properties
+
+      - run: flutter pub get
+      - run: flutter build apk --release
+
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: release-apk
+          path: pt3flutter/build/app/outputs/flutter-apk/app-release.apk
