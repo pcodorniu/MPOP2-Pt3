@@ -15,7 +15,7 @@ jobs:
     name: Job 1 - QA (Quality Assurance)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
 
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
@@ -36,7 +36,7 @@ jobs:
           grep "SF:" coverage/lcov.info -A 2 | awk '/SF/ {f=$1} /LH/ {h=$1} /LF/ {l=$1; if(l>0) print "| " f " | " (h/l*100) "% |"}' | sed 's/SF:lib\///' | sed 's/LH://' | sed 's/LF://' >> $GITHUB_STEP_SUMMARY
 
       - name: Upload coverage report
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: coverage-report
           path: pt3flutter/coverage/lcov.info
@@ -46,7 +46,7 @@ jobs:
     needs: qa
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - uses: subosito/flutter-action@v2
         with:
           channel: 'stable'
